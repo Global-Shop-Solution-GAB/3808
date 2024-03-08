@@ -1,0 +1,405 @@
+Program.Sub.ScreenSU.Start
+gui.F_WO_Priority..create
+gui.F_WO_Priority..caption("Work Order Priority Change")
+gui.F_WO_Priority..size(12000,8130)
+gui.F_WO_Priority..position(0,0)
+gui.F_WO_Priority..event(unload,f_wo_priority_unload)
+gui.F_WO_Priority..alwaysontop(False)
+gui.F_WO_Priority..fontname("Arial")
+gui.F_WO_Priority..fontsize(8)
+gui.F_WO_Priority..forecolor(0)
+gui.F_WO_Priority..fontstyle(,,,,)
+gui.F_WO_Priority..BackColor(-2147483633)
+gui.F_WO_Priority..controlbox(True)
+gui.F_WO_Priority..maxbutton(True)
+gui.F_WO_Priority..minbutton(True)
+gui.F_WO_Priority..mousepointer(0)
+gui.F_WO_Priority..moveable(True)
+gui.F_WO_Priority..sizeable(False)
+gui.F_WO_Priority..ShowInTaskBar(True)
+gui.F_WO_Priority..titlebar(True)
+gui.F_WO_Priority.gsfg_jobs.create(gsflexgrid)
+gui.F_WO_Priority.gsfg_jobs.FixedRows(0)
+gui.F_WO_Priority.gsfg_jobs.FixedCols(0)
+gui.F_WO_Priority.gsfg_jobs.visible(True)
+gui.F_WO_Priority.gsfg_jobs.size(11445,6915)
+gui.F_WO_Priority.gsfg_jobs.zorder(0)
+gui.F_WO_Priority.gsfg_jobs.position(200,200)
+gui.F_WO_Priority.gsfg_jobs.enabled(True)
+gui.F_WO_Priority.gsfg_jobs.event(mousedown,gsfg_jobs_mousedown)
+gui.F_WO_Priority.gsfg_jobs.event(posttextmatrix,gsfg_jobs_posttextmatrix)
+'gui.F_WO_Priority.gsfg_jobs.event(lostfocus,gsfg_jobs_posttextmatrix)
+gui.F_WO_Priority.cmd_Save.create(button)
+gui.F_WO_Priority.cmd_Save.caption("Save")
+gui.F_WO_Priority.cmd_Save.visible(True)
+gui.F_WO_Priority.cmd_Save.size(1000,375)
+gui.F_WO_Priority.cmd_Save.zorder(0)
+gui.F_WO_Priority.cmd_Save.position(200,7200)
+gui.F_WO_Priority.cmd_Save.enabled(True)
+gui.F_WO_Priority.cmd_Save.fontname("Arial")
+gui.F_WO_Priority.cmd_Save.fontsize(8)
+gui.F_WO_Priority.cmd_Save.event(click,cmd_save_click)
+
+
+Program.Sub.ScreenSU.End
+
+Program.Sub.Preflight.Start
+
+V.UDT.Jobs.Define("Job",String,"Job")
+V.UDT.Jobs.Define("Suffix",String,"Suffix")
+V.UDT.Jobs.Define("Part",String,"Part")
+V.UDT.Jobs.Define("Router",String,"Router")
+V.UDT.Jobs.Define("Description",String,"Description")
+V.UDT.Jobs.Define("OrderDt",String,"date_opened")
+V.UDT.Jobs.Define("DueDt",String,"date_due")
+V.UDT.Jobs.Define("RunQty",Long,"qty_order")
+V.UDT.Jobs.Define("Priority",String,"priority")
+V.uGlobal.uJobs.Declare("Jobs")
+V.uGlobal.uGrid.Declare("Jobs")
+
+Program.Sub.Preflight.End
+
+Program.Sub.Main.Start
+F.Intrinsic.Control.SetErrorHandler("Main_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sText.Declare(String)
+V.Local.iC.Declare(Long)
+V.Global.bDirty.Declare(Boolean,False)
+V.Local.iCtrl.Declare(Long)
+V.Local.sHold.Declare(String)
+
+F.Intrinsic.UI.InvokeWaitDialog("Loading Work Orders. Please wait..","Loading")
+
+F.Intrinsic.Control.CallSub(Initialize_grid)
+V.uGlobal.uGrid.Redim(0,0)
+V.uGlobal.uJobs.Redim(0,0)
+
+F.ODBC.Connection!conX.OpenCompanyConnection
+F.ODBC.Connection!conX.OpenRecordsetRO("rst","select job, suffix, part, router, description, date_opened, date_due, qty_order, priority from v_JOB_HEADER where DATE_CLOSED = '1900-01-01' order by job, suffix")
+
+	F.Intrinsic.Variable.LoadUDTFromRecordset("conX","rst","V.uGlobal.uJobs",False)
+F.ODBC.conX!rst.Close
+F.Intrinsic.Variable.UDTCopy(V.uGlobal.uJobs,V.uGlobal.uGrid,False)
+
+Gui.F_WO_Priority.gsfg_jobs.LoadFromUDT("V.uGlobal.uJobs","Job::0*!*Suffix::1*!*Part::2*!*Router::3*!*Description::4*!*OrderDt::5*!*DueDt::6*!*RunQty::7*!*Priority::8",1)
+Gui.F_WO_Priority.gsfg_jobs.SetColumnPercentages(".08:.05:.17:.19:.19:.09:.09:.07:.07")
+Gui.F_WO_Priority.gsfg_jobs.FixedRows(1)
+
+F.Intrinsic.UI.CloseWaitDialog
+
+Gui.F_WO_Priority..Show
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Main_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_WO_PRIORITY_MASS_CHANGE.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.Main.End
+
+program.sub.f_wo_priority_unload.start
+F.Intrinsic.Control.SetErrorHandler("f_wo_priority_unload_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.iRet.Declare(Long)
+
+F.Intrinsic.Control.If(V.Global.bDirty,=,True)
+	F.Intrinsic.UI.Msgbox("Do you want to save changes and reschedule jobs before exiting?","Save Changes",4,V.Local.iRet)
+	F.Intrinsic.Control.If(V.Local.iRet,=,6)
+		F.Intrinsic.Control.CallSub(Cmd_save_click)
+		F.ODBC.Connection!conX.Close
+		F.Intrinsic.Control.End
+	F.Intrinsic.Control.Else
+		F.ODBC.Connection!conX.Close
+		F.Intrinsic.Control.End
+	F.Intrinsic.Control.EndIf
+F.Intrinsic.Control.Else
+	F.ODBC.Connection!conX.Close
+	F.Intrinsic.Control.End
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("f_wo_priority_unload_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_WO_PRIORITY_MASS_CHANGE.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+program.sub.f_wo_priority_unload.end
+
+program.sub.cmd_save_click.start
+F.Intrinsic.Control.SetErrorHandler("cmd_save_click_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sParam.Declare(String)
+V.Local.sQuery.Declare(String)
+V.Local.sMsg.Declare(String)
+V.Local.sReturn.Declare(String)
+V.Local.iC.Declare(Long)
+
+F.Intrinsic.UI.InvokeWaitDialog("Please wait while work order changes are saved.","Saving")
+
+Gui.F_WO_Priority.gsfg_jobs.Commit
+F.Intrinsic.Control.CallSub(Gsfg_jobs_posttextmatrix)
+F.Intrinsic.Control.If(V.Args.bErr,=,True)
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+'Gui.F_WO_Priority.gsfg_jobs.ExportToUDT(V.uGlobal.uJobs,"0*!*1*!*2*!*3*!*4*!*5*!*6*!*7*!*8","Job*!*Suffix*!*Part*!*Router*!*Description*!*OrderDt*!*DueDt*!*RunQty*!*Priority",1,-1,False)
+F.Intrinsic.Control.CallSub(Export_grid_to_udt)
+
+F.Intrinsic.Control.If(V.uGlobal.uJobs.UBound,<>,-1)
+	F.Intrinsic.Control.For(V.Local.iC,0,V.uGlobal.uJobs.UBound,1)
+		F.Intrinsic.Variable.UDTMultiSeek(V.uGlobal.uJobs!Job,V.uGlobal.uGrid(V.Local.iC)!Job,V.uGlobal.uJobs!Suffix,V.uGlobal.uGrid(V.Local.iC)!Suffix,V.Local.sReturn)
+		F.Intrinsic.Control.If(V.Local.sReturn,<>,"")
+			F.Intrinsic.String.Split(V.Local.sReturn,"*!*",V.Local.sReturn)
+			F.Intrinsic.Control.If(V.uGlobal.uJobs(V.Local.sReturn(0))!Priority,<>,V.uGlobal.uGrid(V.Local.iC)!Priority)
+				F.Intrinsic.String.Concat("SELECT * FROM JOB_HEADER WHERE JOB = '",V.uGlobal.uJobs(V.Local.sReturn(0))!Job,"' AND SUFFIX = '",V.uGlobal.uJobs(V.Local.sReturn(0))!Suffix,"' ORDER BY JOB, SUFFIX",V.Local.sQuery)
+				F.ODBC.Connection!conX.OpenLocalRecordsetRW("rstJob",V.Local.sQuery)
+				F.Intrinsic.Control.If(V.ODBC.conX!rstJob.EOF,<>,True)
+					F.ODBC.conX!rstJob.Set!PRIORITY(V.uGlobal.uJobs(V.Local.sReturn(0))!Priority)
+					F.ODBC.conX!rstJob.Update
+					F.Intrinsic.String.Concat(V.ODBC.conX!rstJob.FieldValTrim!DATE_START,"!*!",V.ODBC.conX!rstJob.FieldValTrim!DATE_DUE,"!*!",V.uGlobal.uJobs(V.Local.sReturn(0))!Job,"!*!",V.uGlobal.uJobs(V.Local.sReturn(0))!Suffix,"!*!!*!B",V.Local.sParam)
+					F.Global.General.CallWrapperSync("500030",V.Local.sParam)
+				F.Intrinsic.Control.Else
+					F.Intrinsic.String.Concat("Job : ",V.uGlobal.uJobs(V.Local.sReturn(0))!Job,"-",V.uGlobal.uJobs(V.Local.sReturn(0))!Suffix," was not found in the JOB_HEADER table. Unable to update priority.")
+					F.Intrinsic.UI.Msgbox(V.Local.sMsg)
+				F.Intrinsic.Control.EndIf
+				F.ODBC.conX!rstJob.Close
+			F.Intrinsic.Control.EndIf
+		F.Intrinsic.Control.EndIf
+	F.Intrinsic.Control.Next(V.Local.iC)
+F.Intrinsic.Control.EndIf
+
+F.ODBC.Connection!conX.OpenRecordsetRO("rst","select job, suffix, part, router, description, date_opened, date_due, qty_order, priority from JOB_HEADER where DATE_CLOSED = '000000' or DATE_CLOSED is null order by job, suffix")
+	F.Intrinsic.Variable.LoadUDTFromRecordset("conX","rst","V.uGlobal.uJobs",False)
+F.ODBC.conX!rst.Close
+F.Intrinsic.Variable.UDTCopy(V.uGlobal.uJobs,V.uGlobal.uGrid,False)
+
+Gui.F_WO_Priority.gsfg_jobs.Visible(false)
+Gui.F_WO_Priority.gsfg_jobs.LoadFromUDT("V.uGlobal.uJobs","Job::0*!*Suffix::1*!*Part::2*!*Router::3*!*Description::4*!*OrderDt::5*!*DueDt::6*!*RunQty::7*!*Priority::8",1)
+Gui.F_WO_Priority.gsfg_jobs.SetColumnPercentages(".08:.05:.17:.19:.19:.09:.09:.07:.07")
+Gui.F_WO_Priority.gsfg_jobs.FixedRows(1)
+Gui.F_WO_Priority.gsfg_jobs.Visible(true)
+
+F.Intrinsic.UI.CloseWaitDialog
+F.Intrinsic.UI.Msgbox("Save completed.")
+V.Global.bDirty.Set(False)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("cmd_save_click_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_WO_PRIORITY_MASS_CHANGE.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+program.sub.cmd_save_click.end
+
+Program.Sub.Initialize_Grid.Start
+F.Intrinsic.Control.SetErrorHandler("Initialize_Grid_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.iC.Declare(Long)
+V.Local.ColNo.Declare(Long)
+
+Gui.F_WO_Priority.gsfg_jobs.Cols(9)
+Gui.F_WO_Priority.gsfg_jobs.Rows(1)
+
+Gui.F_WO_Priority.gsfg_jobs.TextMatrix(0,0,"Job")
+Gui.F_WO_Priority.gsfg_jobs.TextMatrix(1,0,"Suffix")
+Gui.F_WO_Priority.gsfg_jobs.TextMatrix(2,0,"Part")
+Gui.F_WO_Priority.gsfg_jobs.TextMatrix(3,0,"Router")
+Gui.F_WO_Priority.gsfg_jobs.TextMatrix(4,0,"Description")
+Gui.F_WO_Priority.gsfg_jobs.TextMatrix(5,0,"Order Date")
+Gui.F_WO_Priority.gsfg_jobs.TextMatrix(6,0,"Due Date")
+Gui.F_WO_Priority.gsfg_jobs.TextMatrix(7,0,"Run Qty")
+Gui.F_WO_Priority.gsfg_jobs.TextMatrix(8,0,"Priority")
+
+Gui.F_WO_Priority.gsfg_jobs.Rows(2)
+Gui.F_WO_Priority.gsfg_jobs.FixedRows(1)
+
+F.Intrinsic.Control.For(V.Local.iC,0,7,1)
+	Gui.F_WO_Priority.gsfg_jobs.BuildStyle(1,V.Local.iC,"Type","Locked","True")
+	Gui.F_WO_Priority.gsfg_jobs.BuildStyle(1,V.Local.iC,"Format","Alignment","2")
+F.Intrinsic.Control.Next(V.Local.iC)
+	Gui.F_WO_Priority.gsfg_jobs.BuildStyle(1,8,"Format","Alignment","2")
+	
+F.Intrinsic.Control.For(V.Local.iC, 0, 8, 1)
+	V.Local.ColNo.Set(V.Local.iC)
+	Gui.F_WO_Priority.gsfg_jobs.EnableColumnSort(true, V.Local.ColNo)
+F.Intrinsic.Control.Next(V.Local.iC)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Initialize_Grid_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_WO_PRIORITY_MASS_CHANGE.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.Initialize_Grid.End
+
+program.sub.gsfg_jobs_posttextmatrix.start
+F.Intrinsic.Control.SetErrorHandler("gsfg_jobs_posttextmatrix_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sText.Declare(String)
+V.Local.iRow.Declare(Long)
+V.Local.iLen.Declare(Long)
+V.Local.bNum.Declare(Boolean)
+V.Local.bErr.Declare(Boolean)
+
+V.Local.bErr.Set(False)
+V.Global.bDirty.Set(True)
+
+V.Local.iRow.Set(V.Screen.F_WO_Priority!gsfg_jobs.RowSel)
+Gui.F_WO_Priority.gsfg_jobs.GetTextMatrix(8,V.Local.iRow,V.Local.sText)
+
+F.Intrinsic.Control.If(V.Local.sText,=,"")
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.String.Len(V.Local.sText,V.Local.iLen)
+V.Local.bNum.Set(V.Local.sText.IsNumeric)
+
+F.Intrinsic.Control.If(V.Local.bNum,=,False)
+	F.Intrinsic.UI.Msgbox("Please enter a three digit number.")
+	Gui.F_WO_Priority.gsfg_jobs.TextMatrix(8,V.Local.iRow,"")
+	V.Local.bErr.Set(True)
+F.Intrinsic.Control.ElseIf(V.Local.iLen,>,3)
+	F.Intrinsic.UI.Msgbox("Please enter a three digit number.")
+	Gui.F_WO_Priority.gsfg_jobs.TextMatrix(8,V.Local.iRow,"")
+	V.Local.bErr.Set(True)
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Variable.AddRV("bErr",V.Local.bErr)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("gsfg_jobs_posttextmatrix_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_WO_PRIORITY_MASS_CHANGE.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+program.sub.gsfg_jobs_posttextmatrix.end
+
+program.sub.gsfg_jobs_mousedown.start
+F.Intrinsic.Control.SetErrorHandler("gsfg_jobs_mousedown_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.iCol.Declare(Long)
+
+V.Local.iCol.Set(V.Args.MouseCol)
+
+F.Intrinsic.Control.If(V.Args.mouseRow,<>,0)
+	F.Intrinsic.Control.ExitSub
+F.Intrinsic.Control.EndIf
+
+F.Intrinsic.Control.SelectCase(V.Local.iCol)
+F.Intrinsic.Control.Case(0)
+	'sort by job
+	Gui.F_WO_Priority.gsfg_jobs.SortColumn(0,0)
+F.Intrinsic.Control.Case(1)
+	'sort by suffix
+	Gui.F_WO_Priority.gsfg_jobs.SortColumn(1,1)
+F.Intrinsic.Control.Case(2)
+	'sort by part
+	Gui.F_WO_Priority.gsfg_jobs.SortColumn(2,0)
+F.Intrinsic.Control.Case(3)
+	'sort by router
+	Gui.F_WO_Priority.gsfg_jobs.SortColumn(3,0)
+F.Intrinsic.Control.Case(4)
+	'sort by description
+	Gui.F_WO_Priority.gsfg_jobs.SortColumn(4,0)
+F.Intrinsic.Control.Case(5)
+	'sort by order date
+	Gui.F_WO_Priority.gsfg_jobs.SortColumn(5,2)
+F.Intrinsic.Control.Case(6)
+	'sort by due date
+	Gui.F_WO_Priority.gsfg_jobs.SortColumn(6,2)
+F.Intrinsic.Control.Case(7)
+	'sort by run qty
+	Gui.F_WO_Priority.gsfg_jobs.SortColumn(7,1)
+F.Intrinsic.Control.Case(8)
+	'sort by priority
+	Gui.F_WO_Priority.gsfg_jobs.SortColumn(8,1)
+F.Intrinsic.Control.CaseElse
+F.Intrinsic.Control.EndSelect
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("gsfg_jobs_mousedown_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_WO_PRIORITY_MASS_CHANGE.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+program.sub.gsfg_jobs_mousedown.end
+
+Program.Sub.Export_Grid_To_UDT.Start
+F.Intrinsic.Control.SetErrorHandler("Export_Grid_To_UDT_Err")
+F.Intrinsic.Control.ClearErrors
+
+V.Local.sError.Declare(String)
+V.Local.sRow.Declare(String)
+V.Local.iRows.Declare(Long)
+V.Local.iC.Declare(Long)
+V.Local.iIndex.Declare(Long)
+V.Local.iUBound.Declare(Long)
+
+V.Local.iRows.Set(V.Screen.F_WO_Priority!gsfg_jobs.Rows)
+F.Intrinsic.Math.Sub(V.Local.iRows,1,V.Local.iRows)
+F.Intrinsic.Math.Sub(V.Local.iRows,1,V.Local.iUBound)
+V.uGlobal.uJobs.Redim(0,V.Local.iUBound)
+
+F.Intrinsic.Control.For(V.Local.iC,1,V.Local.iRows,1)
+	F.Intrinsic.Math.Sub(V.Local.iC,1,V.Local.iIndex)
+	Gui.F_WO_Priority.gsfg_jobs.ReadRow(V.Local.iC,V.Local.sRow)
+	F.Intrinsic.String.Split(V.Local.sRow,"*!*",V.Local.sRow)
+	V.uGlobal.uJobs(V.Local.iIndex)!Job.Set(V.Local.sRow(0))
+	V.uGlobal.uJobs(V.Local.iIndex)!Suffix.Set(V.Local.sRow(1))
+	V.uGlobal.uJobs(V.Local.iIndex)!Part.Set(V.Local.sRow(2))
+	V.uGlobal.uJobs(V.Local.iIndex)!Router.Set(V.Local.sRow(3))
+	V.uGlobal.uJobs(V.Local.iIndex)!Description.Set(V.Local.sRow(4))
+	V.uGlobal.uJobs(V.Local.iIndex)!OrderDt.Set(V.Local.sRow(5))
+	V.uGlobal.uJobs(V.Local.iIndex)!DueDt.Set(V.Local.sRow(6))
+	V.uGlobal.uJobs(V.Local.iIndex)!RunQty.Set(V.Local.sRow(7))
+	V.uGlobal.uJobs(V.Local.iIndex)!Priority.Set(V.Local.sRow(8))
+F.Intrinsic.Control.Next(V.Local.iC)
+
+'Gui.F_WO_Priority.gsfg_jobs.ExportToUDT(V.uGlobal.uJobs,"0*!*1*!*2*!*3*!*4*!*5*!*6*!*7*!*8","Job*!*Suffix*!*Part*!*Router*!*Description*!*OrderDt*!*DueDt*!*RunQty*!*Priority",1,-1,False)
+
+F.Intrinsic.Control.ExitSub
+
+F.Intrinsic.Control.Label("Export_Grid_To_UDT_Err")
+F.Intrinsic.Control.If(V.Ambient.ErrorNumber,<>,0)
+	Function.Intrinsic.String.Concat("Project: ATG_WO_PRIORITY_MASS_CHANGE.gas",V.Ambient.Newline,V.Ambient.Newline,"Subroutine: ",V.Ambient.CurrentSubroutine,V.Ambient.NewLine,"Error Occurred ",V.Ambient.ErrorNumber," with description ",V.Ambient.ErrorDescription,V.Local.sError)
+	F.Intrinsic.UI.Msgbox(V.Local.sError)
+Function.Intrinsic.Control.EndIf
+
+
+Program.Sub.Export_Grid_To_UDT.End
+
+Program.Sub.Comments.Start
+${$0$}$ATG_WO_PRIORITY_MASS_CHANGE$}$MEK$}$5/1/2012
+${$5$}$2.0.0.0$}$2
+${$6$}$Angel$}$20220307162542239$}$KXl0r/FkrMYwb/r4ukQ87aOTsTN7X2ea+MW4UiK7VezTFX1NsBL2/smI/vwz4gqbOhq5Bbf8xUk=
+Program.Sub.Comments.End
